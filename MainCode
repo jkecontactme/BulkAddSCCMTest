@@ -70,6 +70,12 @@ $fileDialog = New-Object System.Windows.Forms.OpenFileDialog
 $fileDialog.Filter = 'Text Files (*.txt)|*.txt'
 $fileDialog.Title = 'Select a File with Machine Names'
 
+# TextBox for manual service tag entry
+$manualServiceTagTextBox = New-Object System.Windows.Forms.TextBox
+$manualServiceTagTextBox.Location = New-Object System.Drawing.Point(10,230)
+$manualServiceTagTextBox.Size = New-Object System.Drawing.Size(150,20)
+$form.Controls.Add($manualServiceTagTextBox)
+
 # CheckBox for suspending BitLocker
 $suspendBitLockerCheckBox = New-Object System.Windows.Forms.CheckBox
 $suspendBitLockerCheckBox.Location = New-Object System.Drawing.Point(600,260)
@@ -124,6 +130,19 @@ $addCollectionButton.Add_Click({
     }
 })
 $form.Controls.Add($addCollectionButton)
+
+$addServiceTagButton = New-Object System.Windows.Forms.Button
+$addServiceTagButton.Location = New-Object System.Drawing.Point(170,230)
+$addServiceTagButton.Size = New-Object System.Drawing.Size(100,20)
+$addServiceTagButton.Text = 'Add Service Tag'
+$addServiceTagButton.Add_Click({
+    $serviceTag = $manualServiceTagTextBox.Text.Trim()
+    if (-not [string]::IsNullOrWhiteSpace($serviceTag)) {
+        $machineTagsDisplay.AppendText("$serviceTag`r`n")
+        $manualServiceTagTextBox.Clear()
+    }
+})
+$form.Controls.Add($addServiceTagButton)
 
 # Button to remove selected collections from the list
 $removeCollectionButton = New-Object System.Windows.Forms.Button
@@ -183,6 +202,9 @@ $outputBox.Multiline = $true
 $outputBox.ScrollBars = 'Vertical'
 $outputBox.ReadOnly = $true
 $form.Controls.Add($outputBox)
+
+
+
 
 # Show the form
 $form.ShowDialog()
