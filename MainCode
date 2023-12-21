@@ -14,7 +14,6 @@ $form.Text = 'SCCM Bulk Device Addition'
 $form.Size = New-Object System.Drawing.Size(800,600)
 $form.StartPosition = 'CenterScreen'
 
-# Function to add devices to selected collections
 function Add-DevicesToSelectedCollections {
     $devices = $machineTagsDisplay.Text -split "`r`n"
     $selectedCollections = $selectedCollectionsListBox.Items
@@ -23,6 +22,21 @@ function Add-DevicesToSelectedCollections {
         if (-not [string]::IsNullOrWhiteSpace($device)) {
             $resourceId = (Get-CMDevice -Name $device).ResourceID
             if ($resourceId) {
+                # Check if the checkbox for suspending BitLocker is checked
+                if ($suspendBitLockerCheckBox.Checked) {
+                    try {
+                        $rebootCount = [int]$rebootCountTextBox.Text
+                        # Assuming BitLocker is on the C: drive, adjust as necessary
+                        Suspend-BitLocker -MountPoint "C:" -RebootCount $rebootCount
+                        $outputBox.AppendText("BitLocker suspended on $device for $rebootCount reboots`n")
+                    } catch {
+                        $outputBox.AppendText("Failed to suspend BitLocker on ${device}: $_`n")
+                        $outputBox.AppendText("Device $device not in a ready state, skipping addition to collections`n")
+                        continue # Skip to the next device
+                    }
+                }
+
+                # Add device to selected collections
                 foreach ($collectionName in $selectedCollections) {
                     try {
                         Add-CMDeviceCollectionDirectMembershipRule -CollectionName $collectionName -ResourceId $resourceId
@@ -37,7 +51,6 @@ function Add-DevicesToSelectedCollections {
         }
     }
 }
-
 
 # Function to update the display of selected collections
 function Update-SelectedCollectionsDisplay {
@@ -56,6 +69,20 @@ function Remove-SelectedCollections {
 $fileDialog = New-Object System.Windows.Forms.OpenFileDialog
 $fileDialog.Filter = 'Text Files (*.txt)|*.txt'
 $fileDialog.Title = 'Select a File with Machine Names'
+
+# CheckBox for suspending BitLocker
+$suspendBitLockerCheckBox = New-Object System.Windows.Forms.CheckBox
+$suspendBitLockerCheckBox.Location = New-Object System.Drawing.Point(600,260)
+$suspendBitLockerCheckBox.Size = New-Object System.Drawing.Size(180,20)
+$suspendBitLockerCheckBox.Text = 'Suspend BitLocker'
+$form.Controls.Add($suspendBitLockerCheckBox)
+
+# TextBox for specifying reboot count
+$rebootCountTextBox = New-Object System.Windows.Forms.TextBox
+$rebootCountTextBox.Location = New-Object System.Drawing.Point(600,290)
+$rebootCountTextBox.Size = New-Object System.Drawing.Size(180,20)
+$rebootCountTextBox.Text = 'Reboot Count'
+$form.Controls.Add($rebootCountTextBox)
 
 # TextBox for displaying the selected machine tags
 $machineTagsDisplay = New-Object System.Windows.Forms.TextBox
@@ -97,6 +124,194 @@ $addCollectionButton.Add_Click({
     }
 })
 $form.Controls.Add($addCollectionButton)
+
+# Load required assemblies for GUI and OpenFileDialog
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
+# Import SCCM ConfigurationManager module
+Import-Module 'C:\Program Files (x86)\Microsoft Endpoint Manager\AdminConsole\bin\ConfigurationManager\ConfigurationManager.psd1'
+
+# Change to SCCM PSDrive - adjust 'CM1' to your SCCM site code
+Set-Location 'CM1:'
+
+# Create the main form
+$form = New-Object System.Windows.Forms.Form
+$form.Text = 'SCCM Bulk Device Addition'
+$form.Size = New-Object System.Drawing.Size(800,600)
+$form.StartPosition = 'CenterScreen'
+
+function Add-DevicesToSelectedCollections {
+    $devices = $machineTagsDisplay.Text -split "`r`n"
+    $selectedCollections = $selectedCollectionsListBox.Items
+
+    foreach ($device in $devices) {
+        if (-not [string]::IsNullOrWhiteSpace($device)) {
+            $resourceId = (Get-CMDevice -Name $device).ResourceID
+            if ($resourceId) {
+                # Check if the checkbox for suspending BitLocker is checked
+                if ($suspendBitLockerCheckBox.Checked) {
+                    try {
+                        $rebootCount = [int]$rebootCountTextBox.Text
+                        # Assuming BitLocker is on the C: drive, adjust as necessary
+                        Suspend-BitLocker -MountPoint "C:" -RebootCount $rebootCount
+                        $outputBox.AppendText("BitLocker suspended on $device for $rebootCount reboots`n")
+                    } catch {
+                        $outputBox.AppendText("Failed to suspend BitLocker on ${device}: $_`n")
+                        $outputBox.AppendText("Device $device not in a ready state, skipping addition to collections`n")
+                        continue # Skip to the next device
+                    }
+                }
+
+                # Add device to selected collections
+                foreach ($collectionName in $selectedCollections) {
+                    try {
+                        Add-CMDeviceCollectionDirectMembershipRule -CollectionName $collectionName -ResourceId $resourceId
+                        $outputBox.AppendText("Added $device to $collectionName`n")
+                    } catch {
+                        $outputBox.AppendText("Failed to add $device to $($collectionName): $_`n")
+                    }
+                }
+            } else {
+                $outputBox.AppendText("Device $device not found in SCCM`n")
+            }
+        }
+    }
+}
+
+# Function to update the display of selected collections
+function Update-SelectedCollectionsDisplay {
+    $selectedCollectionsDisplay.Text = ($selectedCollectionsListBox.Items -join "`r`n")
+}
+
+# Function to remove selected items from the selected collections list
+function Remove-SelectedCollections {
+    foreach ($item in $selectedCollectionsListBox.SelectedItems) {
+        $selectedCollectionsListBox.Items.Remove($item)
+    }
+    Update-SelectedCollectionsDisplay
+}
+
+# Create OpenFileDialog for selecting the file
+$fileDialog = New-Object System.Windows.Forms.OpenFileDialog
+$fileDialog.Filter = 'Text Files (*.txt)|*.txt'
+$fileDialog.Title = 'Select a File with Machine Names'
+
+# CheckBox for suspending BitLocker
+$suspendBitLockerCheckBox = New-Object System.Windows.Forms.CheckBox
+$suspendBitLockerCheckBox.Location = New-Object System.Drawing.Point(600,260)
+$suspendBitLockerCheckBox.Size = New-Object System.Drawing.Size(180,20)
+$suspendBitLockerCheckBox.Text = 'Suspend BitLocker'
+$form.Controls.Add($suspendBitLockerCheckBox)
+
+# TextBox for specifying reboot count
+$rebootCountTextBox = New-Object System.Windows.Forms.TextBox
+$rebootCountTextBox.Location = New-Object System.Drawing.Point(600,290)
+$rebootCountTextBox.Size = New-Object System.Drawing.Size(180,20)
+$rebootCountTextBox.Text = 'Reboot Count'
+$form.Controls.Add($rebootCountTextBox)
+
+# TextBox for displaying the selected machine tags
+$machineTagsDisplay = New-Object System.Windows.Forms.TextBox
+$machineTagsDisplay.Location = New-Object System.Drawing.Point(10,10)
+$machineTagsDisplay.Size = New-Object System.Drawing.Size(780,100)
+$machineTagsDisplay.Multiline = $true
+$machineTagsDisplay.ScrollBars = 'Vertical'
+$machineTagsDisplay.ReadOnly = $true
+$form.Controls.Add($machineTagsDisplay)
+
+# Create a ComboBox for collection search and selection
+$collectionComboBox = New-Object System.Windows.Forms.ComboBox
+$collectionComboBox.Location = New-Object System.Drawing.Point(10,120)
+$collectionComboBox.Size = New-Object System.Drawing.Size(580,20)
+$form.Controls.Add($collectionComboBox)
+
+# Populate ComboBox with collection names
+$collections = Get-CMDeviceCollection | Select-Object -ExpandProperty Name
+foreach ($collection in $collections) {
+    $collectionComboBox.Items.Add($collection)
+}
+
+# Create ListBox for displaying selected collections
+$selectedCollectionsListBox = New-Object System.Windows.Forms.ListBox
+$selectedCollectionsListBox.Location = New-Object System.Drawing.Point(10,150)
+$selectedCollectionsListBox.Size = New-Object System.Drawing.Size(580,100)
+$selectedCollectionsListBox.SelectionMode = 'MultiExtended'
+$form.Controls.Add($selectedCollectionsListBox)
+
+# Button to add selected collection to the list
+$addCollectionButton = New-Object System.Windows.Forms.Button
+$addCollectionButton.Location = New-Object System.Drawing.Point(600,120)
+$addCollectionButton.Size = New-Object System.Drawing.Size(100,20)
+$addCollectionButton.Text = 'Add Collection'
+$addCollectionButton.Add_Click({
+    if ($collectionComboBox.SelectedItem -and -not $selectedCollectionsListBox.Items.Contains($collectionComboBox.SelectedItem)) {
+        $selectedCollectionsListBox.Items.Add($collectionComboBox.SelectedItem)
+        Update-SelectedCollectionsDisplay
+    }
+})
+$form.Controls.Add($addCollectionButton)
+# Create button to add devices to selected collections
+$addDevicesButton = New-Object System.Windows.Forms.Button
+$addDevicesButton.Location = New-Object System.Drawing.Point(120,260)
+$addDevicesButton.Size = New-Object System.Drawing.Size(150,30)
+$addDevicesButton.Text = 'Add Devices to Collections'
+$addDevicesButton.Add_Click({
+    Add-DevicesToSelectedCollections
+})
+$form.Controls.Add($addDevicesButton)
+
+# Button to remove selected collections from the list
+$removeCollectionButton = New-Object System.Windows.Forms.Button
+$removeCollectionButton.Location = New-Object System.Drawing.Point(710,120)
+$removeCollectionButton.Size = New-Object System.Drawing.Size(100,20)
+$removeCollectionButton.Text = 'Remove Selected'
+$removeCollectionButton.Add_Click({ Remove-SelectedCollections })
+$form.Controls.Add($removeCollectionButton)
+
+# TextBox for displaying the selected collections
+$selectedCollectionsDisplay = New-Object System.Windows.Forms.TextBox
+$selectedCollectionsDisplay.Location = New-Object System.Drawing.Point(600,150)
+$selectedCollectionsDisplay.Size = New-Object System.Drawing.Size(180,100)
+$selectedCollectionsDisplay.Multiline = $true
+$selectedCollectionsDisplay.ScrollBars = 'Vertical'
+$selectedCollectionsDisplay.ReadOnly = $true
+$form.Controls.Add($selectedCollectionsDisplay)
+
+# Create button to open file dialog and load machine names
+$loadFileButton = New-Object System.Windows.Forms.Button
+$loadFileButton.Location = New-Object System.Drawing.Point(10,260)
+$loadFileButton.Size = New-Object System.Drawing.Size(100,30)
+$loadFileButton.Text = 'Load Machines'
+$loadFileButton.Add_Click({
+    $result = $fileDialog.ShowDialog()
+    if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
+        $machineTagsDisplay.Text = (Get-Content $fileDialog.FileName) -join "`r`n"
+    }
+})
+$form.Controls.Add($loadFileButton)
+
+# Create button to add devices to selected collections
+$addDevicesButton = New-Object System.Windows.Forms.Button
+$addDevicesButton.Location = New-Object System.Drawing.Point(120,260)
+$addDevicesButton.Size = New-Object System.Drawing.Size(150,30)
+$addDevicesButton.Text = 'Add Devices to Collections'
+$addDevicesButton.Add_Click({
+    Add-DevicesToSelectedCollections
+})
+$form.Controls.Add($addDevicesButton)
+
+# Create output box
+$outputBox = New-Object System.Windows.Forms.TextBox
+$outputBox.Location = New-Object System.Drawing.Point(10,300)
+$outputBox.Size = New-Object System.Drawing.Size(780,290)
+$outputBox.Multiline = $true
+$outputBox.ScrollBars = 'Vertical'
+$outputBox.ReadOnly = $true
+$form.Controls.Add($outputBox)
+
+# Show the form
+$form.ShowDialog()
 
 # Button to remove selected collections from the list
 $removeCollectionButton = New-Object System.Windows.Forms.Button
